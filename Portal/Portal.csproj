@@ -1,0 +1,90 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Portal on its own: chat, voice and video calls and screen sharing with anyone on Ivo or Portal, without Ivo.
+       It borrows Ivo's connection and call code (Core\Portal*.cs), so the two always speak the same language. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Ivo Portal</AssemblyName>
+    <RootNamespace>Ivo</RootNamespace>
+    <Product>Ivo Portal</Product>
+    <Company>Ivo</Company>
+    <Authors>Mihir Sharma</Authors>
+    <Copyright>© 2026 Mihir Sharma</Copyright>
+    <Description>Ivo Portal: chat, calls and screen sharing, person to person</Description>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>portal.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- English only: .NET's messages in 13 other languages are 17 MB the app never shows -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- WinForms (33 MB) would come in only because NAudio's WinForms piece asks for it (through SIPSorcery's audio);
+         Portal never uses it, so packages can't add frameworks: only WPF ships -->
+    <DisableTransitiveFrameworkReferences>true</DisableTransitiveFrameworkReferences>
+    <!-- the Windows API wrappers are 53 MB, of which Portal uses a little (the camera, picture conversion): published
+         trimmed, but only that one library; everything else ships whole (WPF isn't made for trimming) -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <_SuppressWpfTrimError>true</_SuppressWpfTrimError>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <!-- trimming also switches .NET features off by default; Portal uses these, so they stay on: COM (WPF's drag and
+         drop), reflection JSON (chats and settings), real error messages, and BinaryFormatter-free clipboard as before -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <UseSystemResourceKeys>false</UseSystemResourceKeys>
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Compile Include="..\Core\Portal.cs" Link="Shared\Portal.cs" />
+    <Compile Include="..\Core\Portal.Media.cs" Link="Shared\Portal.Media.cs" />
+    <Compile Include="..\Core\PortalContacts.cs" Link="Shared\PortalContacts.cs" />
+    <Compile Include="..\Core\PortalCallView.cs" Link="Shared\PortalCallView.cs" />
+    <Compile Include="..\Core\IvoChats.cs" Link="Shared\IvoChats.cs" />
+    <Compile Include="..\Core\IvoChatsView.cs" Link="Shared\IvoChatsView.cs" />
+    <Compile Include="..\Core\IvoFrame.cs" Link="Shared\IvoFrame.cs" />
+    <Compile Include="..\Core\IncomingCall.cs" Link="Shared\IncomingCall.cs" />
+    <Compile Include="..\Core\AccountChoice.cs" Link="Shared\AccountChoice.cs" />
+    <Compile Include="..\Core\MessageLift.cs" Link="Shared\MessageLift.cs" />
+    <Compile Include="..\Chat\ColorEmoji.cs" Link="Shared\ColorEmoji.cs" />
+    <Compile Include="..\Core\PortalDevices.cs" Link="Shared\PortalDevices.cs" />
+    <Compile Include="..\Core\PortalSettingsView.cs" Link="Shared\PortalSettingsView.cs" />
+    <Compile Include="..\Core\PictureCropper.cs" Link="Shared\PictureCropper.cs" />
+    <Compile Include="..\Core\Toasts.cs" Link="Shared\Toasts.cs" />
+    <Compile Include="..\Core\Nostr.cs" Link="Shared\Nostr.cs" />
+    <Compile Include="..\Core\Net.cs" Link="Shared\Net.cs" />
+    <Compile Include="..\Core\CallFloat.cs" Link="Shared\CallFloat.cs" />
+    <Compile Include="..\Core\GroupCall.cs" Link="Shared\GroupCall.cs" />
+    <Compile Include="..\Core\GroupCallView.cs" Link="Shared\GroupCallView.cs" />
+    <Compile Include="..\Core\NotifyCard.cs" Link="Shared\NotifyCard.cs" />
+    <Compile Include="..\Platform\Sounds.cs" Link="Shared\Sounds.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ivo's chime, the same file as Ivo's -->
+    <None Include="..\Assets\chime.wav" Link="Assets\chime.wav" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Assets\ring.wav" Link="Assets\ring.wav" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+    <PackageReference Include="NBitcoin.Secp256k1" Version="4.0.4" />
+    <PackageReference Include="SIPSorcery" Version="10.0.17" />
+    <PackageReference Include="SIPSorceryMedia.Encoders" Version="10.0.4" />
+    <PackageReference Include="SIPSorceryMedia.Windows" Version="10.0.17" />
+  </ItemGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
+  <!-- trim just the Windows API wrappers: every other assembly is copied as it is -->
+  <Target Name="TrimOnlyWindowsSdk" AfterTargets="PrepareForILLink">
+    <ItemGroup>
+      <ManagedAssemblyToLink Update="@(ManagedAssemblyToLink)" TrimMode="copy" Condition="'%(Filename)' != 'Microsoft.Windows.SDK.NET' and '%(Filename)' != 'WinRT.Runtime'" />
+      <ManagedAssemblyToLink Update="@(ManagedAssemblyToLink)" TrimMode="link" Condition="'%(Filename)' == 'Microsoft.Windows.SDK.NET'" />
+    </ItemGroup>
+  </Target>
+</Project>

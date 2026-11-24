@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="xterm.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  .t { position: absolute; inset: 6px 4px 4px 12px; }
+  .xterm-viewport::-webkit-scrollbar { width: 8px; }
+  .xterm-viewport::-webkit-scrollbar-thumb { background: rgba(128,128,128,.35); border-radius: 4px; }
+</style>
+<script src="xterm.js"></script>
+<script src="addon-fit.js"></script>
+</head>
+<body>
+<script>
+  // Every terminal tab lives in this one page (one browser view for all of them); xterm.js draws each, and
+  // Ivo's host passes bytes to and from each program's pseudo-console by the tab's id.
+  const host = window.chrome.webview;
+  const terms = {};
+  let shown = null;
+  // 16-colour palettes (black red green yellow blue magenta cyan white, then the bright ones)
+  const names = ['black','red','green','yellow','blue','magenta','cyan','white','brightBlack','brightRed','brightGreen','brightYellow','brightBlue','brightMagenta','brightCyan','brightWhite'];
+  const schemes = {
+    campbell: '0C0C0C C50F1F 13A10E C19C00 0037DA 881798 3A96DD CCCCCC 767676 E74856 16C60C F9F1A5 3B78FF B4009E 61D6D6 F2F2F2',
+    ubuntu:   '2E3436 CC0000 4E9A06 C4A000 3465A4 75507B 06989A D3D7CF 555753 EF2929 8AE234 FCE94F 729FCF AD7FA8 34E2E2 EEEEEC',
+    mintty:   '000000 BF0000 00BF00 BFBF00 0000BF BF00BF 00BFBF BFBFBF 404040 FF4040 40FF40 FFFF40 6060FF FF40FF 40FFFF FFFFFF',
+    github:   '484F58 FF7B72 3FB950 D29922 58A6FF BC8CFF 39C5CF B1BAC4 6E7681 FFA198 56D364 E3B341 79C0FF D2A8FF 56D4DD F0F6FC',
+    claude:   '3D3929 E5484D 46A758 E2A53B 6E9BF5 C48AE8 4CC4C4 E8E6DC 6B6658 FF6369 66C47A F0C05A 8EB2FF D9A8F5 6FDADA FAF9F5',
+    google:   '303134 F28B82 81C995 FDD663 8AB4F8 C58AF9 78D9EC E8EAED 5F6368 F6AEA9 A8DAB5 FDE293 AECBFA D7AEFB A1E4F2 FFFFFF',
+    onehalf:  '282C34 E06C75 98C379 E5C07B 61AFEF C678DD 56B6C2 DCDFE4 5A6374 E06C75 98C379 E5C07B 61AFEF C678DD 56B6C2 FFFFFF',
+  };
+
+  function create(o) {
+    const div = document.createElement('div');
+    div.className = 't';
+    document.body.appendChild(div);
+    const palette = {};
+    (schemes[o.scheme] || schemes.onehalf).split(' ').forEach((c, i) => palette[names[i]] = '#' + c);
+    const term = new Terminal({
+      fontFamily: "'Cascadia Code', Consolas, monospace", fontSize: 13, cursorBlink: true, scrollback: 5000,
+      theme: { ...palette, background: o.bg, foreground: o.fg, cursor: o.cursor, selectionBackground: 'rgba(128,128,128,.35)' },
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(div);
+    // Ctrl+C copies when text is selected (otherwise it interrupts, as usual); Ctrl+V pastes.
+    term.attachCustomKeyEventHandler(e => {
+      if (e.type === 'keydown' && e.ctrlKey && e.key === 'c' && term.hasSelection()) {
+        navigator.clipboard.writeText(term.getSelection()); term.clearSelection(); return false;
+      }
+      return true;
+    });
+    term.onData(d => host.postMessage({ type: 'input', id: o.id, data: d }));
+    term.onResize(s => host.postMessage({ type: 'resize', id: o.id, cols: s.cols, rows: s.rows }));
+    terms[o.id] = { term, fit, div, bg: o.bg };
+    show(o.id);
+    host.postMessage({ type: 'created', id: o.id, cols: term.cols, rows: term.rows });
+  }
+
+  function show(id) {
+    for (const k in terms) terms[k].div.style.display = k === id ? 'block' : 'none';
+    shown = id;
+    const t = terms[id];
+    if (!t) return;
+    document.body.style.background = t.bg;
+    t.fit.fit();
+    t.term.focus();
+  }
+
+  new ResizeObserver(() => { if (terms[shown]) terms[shown].fit.fit(); }).observe(document.body);
+
+  host.addEventListener('message', e => {
+    const m = e.data, t = terms[m.id];
+    switch (m.type) {
+      case 'create': create(m); break;
+      case 'show': show(m.id); break;
+      case 'out': if (t) t.term.write(m.data); break;
+      case 'clear': if (t) t.term.clear(); break;
+      case 'close': if (t) { t.term.dispose(); t.div.remove(); delete terms[m.id]; } break;
+    }
+  });
+  host.postMessage({ type: 'ready' });
+</script>
+</body>
+</html>

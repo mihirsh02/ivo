@@ -1,0 +1,188 @@
+<!-- Ivo MSI (WiX 5). Built by installer\build.ps1 next to the Inno .exe, from the same dist\app.
+     Machine-wide (Program Files, one UAC prompt), for IT deployment via Intune/GPO:
+       msiexec /i IvoSetup-<version>.msi /qn
+     -d App=Portal builds Ivo Portal's MSI (IvoPortalSetup-<version>.msi) from the same dist\app. -->
+<?ifndef Version?><?define Version = 1.0.0?><?endif?>
+<?ifndef App?><?define App = Ivo?><?endif?>
+<?if $(App) = Portal?>
+  <?define AppName = Ivo Portal?>
+  <?define InnoId = {B47529B4-032D-4F4E-873A-165EC91CB352}?>
+  <?define UpgradeCode = 87122A19-F7A0-44ED-9C49-338AAA277C90?>
+  <?define AppIcon = ..\Portal\portal.ico?>
+  <?define Art = art-portal?>
+  <?define Blurb = Chat, calls and screen sharing, person to person.?>
+  <?define Opener = Open it from the Start menu.?>
+<?else?>
+  <?define AppName = Ivo?>
+  <?define InnoId = {6E7A3C1D-4B2F-4C8E-9A51-7D0B3E2F9A64}?>
+  <?define UpgradeCode = 6E7A3C1D-4B2F-4C8E-9A51-7D0B3E2F9A65?>
+  <?define AppIcon = ..\Assets\ivo.ico?>
+  <?define Art = art?>
+  <?define Blurb = Your AI desk on Windows: chats with any model, agents that work in your code, a planner and a morning briefing, all in one quiet window.?>
+  <?define Opener = Open it from the Start menu, or press Ctrl+Shift+Space from anywhere.?>
+<?endif?>
+<?ifndef Scope?><?define Scope = perMachine?><?endif?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="$(AppName)" Manufacturer="Ivo" Version="$(Version)" Scope="$(Scope)"
+           UpgradeCode="$(UpgradeCode)">
+    <!-- rebuilds keep the version: replace a same-version install too, removing it first so every file is fresh -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes" Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of $(AppName) is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <!-- Ivo installed by the .exe (Inno): removed silently before the files go in, so there's only ever one copy.
+         Its silent uninstall never touches %AppData%\Ivo; the data question is only asked in a manual uninstall. -->
+    <Property Id="EXEINSTALL">
+      <RegistrySearch Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(InnoId)_is1" Name="QuietUninstallString" Type="raw" Bitness="always64" />
+    </Property>
+    <Property Id="EXEINSTALLUSER">   <!-- a per-user install of the .exe -->
+      <RegistrySearch Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(InnoId)_is1" Name="QuietUninstallString" Type="raw" />
+    </Property>
+    <!-- an uninstaller that endpoint protection removed is skipped: this install goes over the same folder anyway -->
+    <Property Id="EXEINSTALLDIR">
+      <RegistrySearch Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(InnoId)_is1" Name="Inno Setup: App Path" Type="raw" Bitness="always64" />
+    </Property>
+    <Property Id="EXEINSTALLFILE">
+      <DirectorySearch Id="InnoInstallDir" Path="[EXEINSTALLDIR]">
+        <FileSearch Name="unins000.exe" />
+      </DirectorySearch>
+    </Property>
+    <Property Id="EXEINSTALLUSERDIR">
+      <RegistrySearch Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(InnoId)_is1" Name="Inno Setup: App Path" Type="raw" />
+    </Property>
+    <Property Id="EXEINSTALLUSERFILE">
+      <DirectorySearch Id="InnoUserInstallDir" Path="[EXEINSTALLUSERDIR]">
+        <FileSearch Name="unins000.exe" />
+      </DirectorySearch>
+    </Property>
+    <Property Id="IVOINSTALL">   <!-- Ivo's own installer (IvoInstall-<version>.exe) -->
+      <RegistrySearch Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\$(AppName)" Name="QuietUninstallString" Type="raw" Bitness="always64" />
+    </Property>
+    <!-- each runs that install's own quiet uninstall through WiX's quiet runner: no console window opens -->
+    <SetProperty Id="RemoveIvoInstall" Value="[IVOINSTALL]" Before="RemoveIvoInstall" Sequence="execute" Condition="IVOINSTALL AND NOT REMOVE" />
+    <SetProperty Id="RemoveExeInstall" Value="[EXEINSTALL]" Before="RemoveExeInstall" Sequence="execute" Condition="EXEINSTALL AND EXEINSTALLFILE AND NOT REMOVE" />
+    <SetProperty Id="RemoveExeInstallUser" Value="[EXEINSTALLUSER]" Before="RemoveExeInstallUser" Sequence="execute" Condition="EXEINSTALLUSER AND EXEINSTALLUSERFILE AND NOT REMOVE" />
+    <CustomAction Id="RemoveIvoInstall" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec64" Execute="deferred" Impersonate="no" Return="ignore" />
+    <CustomAction Id="RemoveExeInstall" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec64" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="RemoveExeInstallUser" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec64" Execute="deferred" Impersonate="yes" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RemoveExeInstall" Before="InstallFiles" Condition="EXEINSTALL AND EXEINSTALLFILE AND NOT REMOVE" />
+      <Custom Action="RemoveExeInstallUser" Before="InstallFiles" Condition="EXEINSTALLUSER AND EXEINSTALLUSERFILE AND NOT REMOVE" />
+      <Custom Action="RemoveIvoInstall" Before="InstallFiles" Condition="IVOINSTALL AND NOT REMOVE" />
+    </InstallExecuteSequence>
+
+    <!-- Ivo's own pages, dark like the app: Welcome → folder → progress → ready. The art (tools\installer-art\make_art.py)
+         fills each page; text sits on it in Ivo's colours. Errors, "files in use" and Browse stay Windows' own, on light art. -->
+    <Binary Id="IvoSide" SourceFile="$(sys.SOURCEFILEDIR)$(Art)\msi-side.bmp" />
+    <Binary Id="IvoPlain" SourceFile="$(sys.SOURCEFILEDIR)$(Art)\msi-plain.bmp" />
+    <UI Id="IvoUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="9" Bold="yes" />
+      <TextStyle Id="IvoTitle" FaceName="Segoe UI" Size="17" Bold="yes" Red="210" Green="216" Blue="222" />
+      <TextStyle Id="IvoHead" FaceName="Segoe UI" Size="13" Bold="yes" Red="210" Green="216" Blue="222" />
+      <TextStyle Id="IvoBody" FaceName="Segoe UI" Size="9" Red="196" Green="205" Blue="215" />
+      <TextStyle Id="IvoDim" FaceName="Segoe UI" Size="8" Red="138" Green="150" Blue="163" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="BrowseDlg" />
+      <DialogRef Id="CancelDlg" />
+
+      <Dialog Id="IvoWelcomeDlg" Width="370" Height="270" Title="Install $(AppName)">
+        <Control Id="Art" Type="Bitmap" X="0" Y="0" Width="370" Height="270" TabSkip="no" Text="IvoSide" />
+        <Control Id="Title" Type="Text" X="138" Y="28" Width="220" Height="30" Transparent="yes" NoPrefix="yes" Text="{\IvoTitle}Welcome to $(AppName)" />
+        <Control Id="Body" Type="Text" X="138" Y="66" Width="215" Height="90" Transparent="yes" NoPrefix="yes"
+                 Text="{\IvoBody}$(Blurb)" />
+        <Control Id="Keep" Type="Text" X="138" Y="170" Width="215" Height="30" Transparent="yes" NoPrefix="yes" Text="{\IvoDim}Installing $(AppName) $(Version). If $(AppName) is already here, your chats and settings stay as they are." />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Next" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="IvoDirDlg" Width="370" Height="270" Title="Install $(AppName)">
+        <Control Id="Art" Type="Bitmap" X="0" Y="0" Width="370" Height="270" TabSkip="no" Text="IvoPlain" />
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="300" Height="24" Transparent="yes" NoPrefix="yes" Text="{\IvoHead}Where should $(AppName) live?" />
+        <Control Id="Body" Type="Text" X="20" Y="50" Width="320" Height="20" Transparent="yes" NoPrefix="yes" Text="{\IvoBody}Your chats and settings live in your own profile, not in this folder." />
+        <Control Id="Folder" Type="PathEdit" X="20" Y="96" Width="262" Height="18" Property="WIXUI_INSTALLDIR" Indirect="yes" />
+        <Control Id="ChangeFolder" Type="PushButton" X="288" Y="96" Width="62" Height="18" Text="Change…" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" ElevationShield="yes" Text="Install" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="IvoProgressDlg" Width="370" Height="270" Title="Install $(AppName)" Modeless="yes">
+        <Control Id="Art" Type="Bitmap" X="0" Y="0" Width="370" Height="270" TabSkip="no" Text="IvoPlain" />
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="300" Height="24" Transparent="yes" NoPrefix="yes" Text="{\IvoHead}Putting $(AppName) in place" />
+        <Control Id="Body" Type="Text" X="20" Y="50" Width="320" Height="20" Transparent="yes" NoPrefix="yes" Text="{\IvoBody}This takes a moment." />
+        <Control Id="Bar" Type="ProgressBar" X="20" Y="110" Width="330" Height="10" ProgressBlocks="yes" Text="Progress">
+          <Subscribe Event="SetProgress" Attribute="Progress" />
+        </Control>
+        <Control Id="Step" Type="Text" X="20" Y="128" Width="330" Height="12" Transparent="yes" NoPrefix="yes" Text="{\IvoDim}">
+          <Subscribe Event="ActionText" Attribute="Text" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="IvoExitDlg" Width="370" Height="270" Title="Install $(AppName)">
+        <Control Id="Art" Type="Bitmap" X="0" Y="0" Width="370" Height="270" TabSkip="no" Text="IvoSide" />
+        <Control Id="Title" Type="Text" X="138" Y="28" Width="220" Height="30" Transparent="yes" NoPrefix="yes" Text="{\IvoTitle}$(AppName) is ready" />
+        <Control Id="Body" Type="Text" X="138" Y="66" Width="215" Height="60" Transparent="yes" NoPrefix="yes" Text="{\IvoBody}$(Opener)" />
+        <!-- the tick box's own label would be drawn black on the dark page, so the words sit beside it -->
+        <Control Id="Open" Type="CheckBox" X="138" Y="200" Width="11" Height="11" Property="WIXUI_EXITDIALOGOPTIONALCHECKBOX" CheckBoxValue="1" />
+        <Control Id="OpenText" Type="Text" X="153" Y="200" Width="150" Height="12" Transparent="yes" NoPrefix="yes" Text="{\IvoBody}Open $(AppName)" />
+        <Control Id="Finish" Type="PushButton" X="304" Y="243" Width="56" Height="17" Default="yes" Cancel="yes" Text="Finish">
+          <Publish Event="DoAction" Value="LaunchIvo" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" Order="1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="IvoWelcomeDlg" Control="Next" Event="NewDialog" Value="IvoDirDlg" />
+      <Publish Dialog="IvoDirDlg" Control="Back" Event="NewDialog" Value="IvoWelcomeDlg" />
+      <Publish Dialog="IvoDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="IvoDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+      <Publish Dialog="IvoDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+      <Publish Dialog="IvoDirDlg" Control="Next" Event="EndDialog" Value="Return" Order="2" />
+
+      <InstallUISequence>
+        <Show Dialog="IvoWelcomeDlg" Before="IvoProgressDlg" Condition="NOT Installed" />
+        <Show Dialog="IvoProgressDlg" Before="ExecuteAction" />
+        <Show Dialog="IvoExitDlg" OnExit="success" />
+      </InstallUISequence>
+      <AdminUISequence>
+        <Show Dialog="IvoExitDlg" OnExit="success" />
+      </AdminUISequence>
+    </UI>
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUIDialogBmp" Value="$(sys.SOURCEFILEDIR)$(Art)\msi-stock-side.bmp" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(sys.SOURCEFILEDIR)$(Art)\msi-stock-banner.bmp" />
+    <CustomAction Id="LaunchIvo" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]$(AppName).exe&quot;" Return="asyncNoWait" />
+    <UIRef Id="WixUI_Common" />
+
+    <Icon Id="ivo.ico" SourceFile="$(sys.SOURCEFILEDIR)$(AppIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="ivo.ico" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="$(AppName)">
+        <Files Include="$(sys.SOURCEFILEDIR)..\dist\app\**" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Name="$(AppName)" Target="[INSTALLFOLDER]$(AppName).exe" WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKMU" Key="Software\$(AppName)" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+        <!-- just installed: on its next start the app asks whether to keep an account it finds from before -->
+        <RegistryValue Root="HKCU" Key="Software\Ivo\$(AppName)" Name="JustInstalled" Type="integer" Value="1" />
+      </Component>
+    </StandardDirectory>
+    <!-- ponytail: a stale "Start with Windows" Run value survives uninstall here (it's per-user HKCU); the .exe cleans it -->
+  </Package>
+</Wix>

@@ -1,0 +1,514 @@
+<UserControl x:Class="Ivo.ChatPane"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             AllowDrop="True" Drop="Pane_Drop" DragOver="Pane_DragOver" PreviewMouseDown="Pane_Activate">
+    <Grid>
+    <Border Style="{StaticResource SoftShadow}" CornerRadius="18" />
+    <Border x:Name="Frame" CornerRadius="18" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource GlassStroke}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- header: drag it to reorder panes in multi-chat -->
+            <DockPanel x:Name="Header" Margin="16,10,10,0" Background="Transparent" Cursor="SizeAll" PreviewMouseLeftButtonDown="Header_MouseDown" MouseMove="Header_MouseMove"
+                       ToolTip="Drag to move">
+                <DockPanel.Resources>
+                    <!-- soft, borderless header icons: dim until hovered, a rounded tint behind -->
+                    <Style x:Key="HeadIcon" TargetType="Button">
+                        <Setter Property="FontFamily" Value="{DynamicResource IconFont}" />
+                        <Setter Property="FontSize" Value="13" />
+                        <Setter Property="Width" Value="30" />
+                        <Setter Property="Height" Value="28" />
+                        <Setter Property="Margin" Value="2,0,0,0" />
+                        <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="Foreground" Value="{DynamicResource Dim}" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd" CornerRadius="8" Background="Transparent">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#229C7CFF" />
+                                            <Setter Property="Foreground" Value="{DynamicResource Fg}" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="#409C7CFF" /></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </DockPanel.Resources>
+                <Button x:Name="ClosePane" DockPanel.Dock="Right" Style="{StaticResource HeadIcon}" Content="&#xE711;" FontSize="12" ToolTip="Close" Click="ClosePane_Click" />
+                <Button x:Name="PopOut" DockPanel.Dock="Right" Style="{StaticResource HeadIcon}" Content="&#xE8A7;" ToolTip="Companion (Ctrl+Alt+Space)" Click="PopOut_Click" />
+                <Button x:Name="IncogBtn" DockPanel.Dock="Right" Style="{StaticResource HeadIcon}" Content="&#xED1A;" Foreground="#F472B6" ToolTip="Incognito chat" Click="Incog_Click" RenderTransformOrigin="0.5,0.5" />
+                <Button x:Name="SplitPane" DockPanel.Dock="Right" Style="{StaticResource HeadIcon}" Content="&#xE89F;" ToolTip="Split chat" Click="SplitPane_Click" />
+                <Button x:Name="PoolButton" DockPanel.Dock="Right" Style="{StaticResource HeadIcon}" Content="&#xE895;" Visibility="Collapsed" Click="PoolButton_Click" />
+                <TextBlock x:Name="UsageText" DockPanel.Dock="Right" Visibility="Collapsed" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"
+                           Margin="0,0,8,0" ToolTip="Tokens, estimated cost, context" />
+                <TextBlock Text="&#xE76F;" FontFamily="{DynamicResource IconFont}" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBox x:Name="TitleEdit" Visibility="Collapsed" FontWeight="SemiBold" FontSize="13" Padding="6,2" VerticalAlignment="Center" MaxWidth="360" HorizontalAlignment="Left"
+                         PreviewKeyDown="TitleEdit_KeyDown" LostFocus="TitleEdit_LostFocus" />
+                <TextBlock x:Name="TitleText" Text="New chat" Foreground="{DynamicResource Fg}" FontWeight="SemiBold" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Background="Transparent" Cursor="IBeam" ToolTip="Double-click to rename" MouseLeftButtonDown="Title_MouseDown" />
+            </DockPanel>
+
+            <!-- empty state: glowing 3D crystal that follows the cursor -->
+            <Grid x:Name="Empty" Grid.Row="1" Background="Transparent" MouseMove="Empty_MouseMove">
+                <Viewbox StretchDirection="DownOnly" Margin="12">
+                    <StackPanel x:Name="EmptyStack" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Grid x:Name="CrystalHost" Width="220" Height="220" Visibility="{DynamicResource DecorVis}" Background="Transparent" Cursor="Hand"
+                              ToolTip="Drag to spin it" ToolTipService.InitialShowDelay="1200"
+                              MouseLeftButtonDown="Crystal_Down" MouseMove="Crystal_Move" MouseLeftButtonUp="Crystal_Up" LostMouseCapture="Crystal_Lost">
+                            <Ellipse x:Name="Halo" Visibility="Collapsed" Width="190" Height="190" RenderTransformOrigin=".5,.5" CacheMode="BitmapCache">
+                                <Ellipse.Fill><RadialGradientBrush><GradientStop Color="#887C5CFF" /><GradientStop Color="#0022D3EE" Offset="1" /></RadialGradientBrush></Ellipse.Fill>
+                                <Ellipse.RenderTransform><ScaleTransform x:Name="HaloScale" /></Ellipse.RenderTransform>
+                            </Ellipse>
+                            <Viewport3D>
+                                <Viewport3D.Camera>
+                                    <PerspectiveCamera Position="0,0,4.4" LookDirection="0,0,-1" FieldOfView="45" />
+                                </Viewport3D.Camera>
+                                <ModelVisual3D>
+                                    <ModelVisual3D.Content>
+                                        <Model3DGroup>
+                                            <AmbientLight Color="#404050" />
+                                            <DirectionalLight Color="#FFFFFF" Direction="-1,-1,-2" />
+                                            <PointLight Color="#22D3EE" Position="2,2,2" />
+                                            <PointLight Color="#F472B6" Position="-2,-2,2" />
+                                            <GeometryModel3D>
+                                                <GeometryModel3D.Geometry>
+                                                    <MeshGeometry3D Positions="1,0,0 -1,0,0 0,1.3,0 0,-1.3,0 0,0,1 0,0,-1"
+                                                                    TriangleIndices="2,4,0 2,0,5 2,5,1 2,1,4 3,0,4 3,5,0 3,1,5 3,4,1" />
+                                                </GeometryModel3D.Geometry>
+                                                <GeometryModel3D.Material>
+                                                    <MaterialGroup>
+                                                        <DiffuseMaterial>
+                                                            <DiffuseMaterial.Brush>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                    <GradientStop Color="#7C5CFF" Offset="0" />
+                                                                    <GradientStop Color="#22D3EE" Offset="1" />
+                                                                </LinearGradientBrush>
+                                                            </DiffuseMaterial.Brush>
+                                                        </DiffuseMaterial>
+                                                        <SpecularMaterial Brush="White" SpecularPower="40" />
+                                                    </MaterialGroup>
+                                                </GeometryModel3D.Material>
+                                                <GeometryModel3D.BackMaterial><DiffuseMaterial Brush="#7C5CFF" /></GeometryModel3D.BackMaterial>
+                                                <GeometryModel3D.Transform>
+                                                    <Transform3DGroup>
+                                                        <RotateTransform3D><RotateTransform3D.Rotation><AxisAngleRotation3D x:Name="Spin" Axis="0,1,0" /></RotateTransform3D.Rotation></RotateTransform3D>
+                                                        <RotateTransform3D><RotateTransform3D.Rotation><AxisAngleRotation3D x:Name="TiltX" Axis="1,0,0" /></RotateTransform3D.Rotation></RotateTransform3D>
+                                                        <RotateTransform3D><RotateTransform3D.Rotation><AxisAngleRotation3D x:Name="TiltZ" Axis="0,0,1" /></RotateTransform3D.Rotation></RotateTransform3D>
+                                                        <TranslateTransform3D x:Name="Bob" />
+                                                    </Transform3DGroup>
+                                                </GeometryModel3D.Transform>
+                                            </GeometryModel3D>
+                                        </Model3DGroup>
+                                    </ModelVisual3D.Content>
+                                </ModelVisual3D>
+                            </Viewport3D>
+                        </Grid>
+                        <TextBlock x:Name="EmptyTitle" Text="What are we building today?" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource Fg}"
+                                   HorizontalAlignment="Center" Margin="0,6,0,6" />
+                        <TextBlock x:Name="EmptyHint" Text="Pick a model below and ask anything." Foreground="{DynamicResource Dim}"
+                                   HorizontalAlignment="Center" Margin="0,0,0,22" />
+                        <WrapPanel x:Name="Suggestions" HorizontalAlignment="Center" MaxWidth="660" />
+                    </StackPanel>
+                </Viewbox>
+            </Grid>
+
+            <ScrollViewer x:Name="Scroller" Grid.Row="1" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="Log" Margin="24,12,24,8" />
+            </ScrollViewer>
+
+            <!-- composer: rotating border beam in Glow theme -->
+            <!-- chat options: drawn inside the pane (not a popup) so it never leaves the window -->
+            <Border x:Name="OptionsPanel" Grid.Row="0" Grid.RowSpan="2" Width="380" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="14,8,14,2"
+                    CornerRadius="14" Background="{DynamicResource PopupBg}" BorderBrush="{DynamicResource GlassStroke}" BorderThickness="1"
+                    Visibility="{Binding IsChecked, ElementName=OptionsToggle, Converter={StaticResource Bool2Vis}}" PreviewKeyDown="OptionsPanel_KeyDown">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,0,16,16">
+                    <StackPanel>
+                        <StackPanel.Resources>
+                            <Style x:Key="Track" TargetType="Border">
+                                <Setter Property="CornerRadius" Value="10" />
+                                <Setter Property="Padding" Value="3" />
+                                <Setter Property="Background" Value="{DynamicResource Glass}" />
+                            </Style>
+                        </StackPanel.Resources>
+
+                        <TextBlock Text="MODEL" Style="{StaticResource Label}" />
+                        <!-- the provider: same in-panel dropdown as the model below -->
+                        <Button x:Name="ProviderField" Height="32" Padding="10,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="ProviderField_Click"
+                                ToolTip="Provider, gateway or agent">
+                            <DockPanel>
+                                <TextBlock x:Name="ProviderChevron" DockPanel.Dock="Right" Text="&#xE70D;" FontFamily="{DynamicResource IconFont}" FontSize="12" Opacity="0.6" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ProviderFieldText" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Button>
+                        <Border x:Name="ProviderBox" Visibility="Collapsed" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource GlassStroke}" Background="{DynamicResource CodeBg}" Margin="0,6,0,0">
+                            <ListBox x:Name="ProviderPick" MaxHeight="220" Background="Transparent" BorderThickness="0" Padding="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     SelectionChanged="Provider_Changed" PreviewMouseLeftButtonUp="ProviderPick_Up">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Cursor" Value="Hand" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Bd" CornerRadius="6" Padding="10,5" Background="Transparent">
+                                                        <TextBlock Text="{Binding}" FontSize="13" Foreground="{DynamicResource Fg}" TextTrimming="CharacterEllipsis" />
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource Glass}" /></Trigger>
+                                                        <Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassStroke}" /></Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+                        </Border>
+                        <!-- the model: one field that opens the search and list below it (inside the panel, not a pop-up) -->
+                        <Button x:Name="ModelField" Margin="0,8,0,0" Height="32" Padding="10,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="ModelField_Click"
+                                ToolTip="Choose the model">
+                            <DockPanel>
+                                <TextBlock x:Name="ModelChevron" DockPanel.Dock="Right" Text="&#xE70D;" FontFamily="{DynamicResource IconFont}" FontSize="12" Opacity="0.6" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ModelFieldText" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Button>
+                        <Border x:Name="ModelBox" Visibility="Collapsed" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource GlassStroke}" Background="{DynamicResource CodeBg}" Margin="0,6,0,0">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top">
+                                    <TextBlock Text="&#xE721;" FontFamily="{DynamicResource IconFont}" FontSize="14" Foreground="{DynamicResource Dim}" Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                                    <TextBox x:Name="ModelSearch" Style="{StaticResource Bare}" Padding="32,8,10,8" FontSize="13" VerticalContentAlignment="Top"
+                                             TextChanged="ModelSearch_Changed" PreviewKeyDown="ModelSearch_KeyDown" />
+                                    <TextBlock x:Name="ModelSearchHint" Text="Search, or type any model id" Foreground="{DynamicResource Dim}" FontSize="13"
+                                               Margin="34,8,0,0" VerticalAlignment="Top" IsHitTestVisible="False" />
+                                </Grid>
+                                <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource GlassStroke}" />
+                                <TextBlock x:Name="CustomModelHint" DockPanel.Dock="Bottom" Visibility="Collapsed" Foreground="{DynamicResource Dim}" FontSize="12"
+                                           TextWrapping="Wrap" Margin="12,6,12,8" />
+                                <ListBox x:Name="ModelList" MaxHeight="210" Background="Transparent" BorderThickness="0" Padding="4"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="ModelList_Changed">
+                                    <ListBox.Resources>
+                                        <!-- pin / star: hidden until the row is hovered, always shown when on -->
+                                        <Style x:Key="RowIcon" TargetType="Button" BasedOn="{StaticResource Ghost}">
+                                            <Setter Property="FontSize" Value="12" />
+                                            <Setter Property="Opacity" Value="0" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                    <Setter Property="Opacity" Value="0.8" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="True">
+                                                    <Setter Property="Opacity" Value="1" />
+                                                    <Setter Property="Foreground" Value="#FFC4B5FD" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListBox.Resources>
+                                    <ListBox.GroupStyle>
+                                        <GroupStyle>
+                                            <GroupStyle.HeaderTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Dim}" Margin="10,8,0,4" />
+                                                </DataTemplate>
+                                            </GroupStyle.HeaderTemplate>
+                                        </GroupStyle>
+                                    </ListBox.GroupStyle>
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Cursor" Value="Hand" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Grid>
+                                                            <Border x:Name="Bd" CornerRadius="6" Padding="10,1,4,1" Margin="0,0" Background="Transparent">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <Border x:Name="Bar" Width="3" CornerRadius="2" Margin="1,9" HorizontalAlignment="Left" Background="{DynamicResource AccentGrad}" Visibility="Collapsed" />
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Glass}" />
+                                                            </Trigger>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassStroke}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <!-- status dot · name · pin · star -->
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="{Binding StarGlyph}" Tag="{Binding IsDefault}" Style="{StaticResource RowIcon}"
+                                                        ToolTip="{Binding StarTip}" PreviewMouseDown="Star_MouseDown" />
+                                                <Button DockPanel.Dock="Right" Content="{Binding PinGlyph}" Tag="{Binding Pinned}" Style="{StaticResource RowIcon}"
+                                                        ToolTip="{Binding PinTip}" PreviewMouseDown="Pin_MouseDown" />
+                                                <Ellipse Width="6" Height="6" Margin="0,0,9,0" Fill="{Binding Dot}" ToolTip="{Binding StatusText}" VerticalAlignment="Center" />
+                                                <TextBlock DockPanel.Dock="Right" Text="{Binding SpeedText}" FontSize="12" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="6,0,6,0"
+                                                           ToolTip="Fast: under 10 s" />
+                                                <TextBlock Text="{Binding Short}" FontSize="13" Foreground="{DynamicResource Fg}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Tip}" />
+                                            </DockPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </DockPanel>
+                        </Border>
+
+                        <TextBlock Text="MODE" Style="{StaticResource Label}" />
+                        <Border Style="{StaticResource Track}">
+                            <UniformGrid x:Name="ModePick" Columns="3">
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Mode" Tag="interactive" Checked="Mode_Checked">
+                                    <TextBlock Text="Interactive" />
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Mode" Tag="plan" Checked="Mode_Checked">
+                                    <TextBlock Text="Plan" />
+                                </RadioButton>
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Mode" Tag="autopilot" Checked="Mode_Checked">
+                                    <TextBlock Text="Autopilot" />
+                                </RadioButton>
+                            </UniformGrid>
+                        </Border>
+                        <TextBlock x:Name="ModeHint" Foreground="{DynamicResource Dim}" FontSize="12" Margin="4,6,0,0" TextWrapping="Wrap" />
+
+                        <TextBlock Text="EFFORT" Style="{StaticResource Label}" />
+                        <Border Style="{StaticResource Track}">
+                            <UniformGrid x:Name="EffortPick" Columns="4">
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Effort" Tag="off" Content="Off" Checked="Effort_Checked" />
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Effort" Tag="low" Content="Low" Checked="Effort_Checked" />
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Effort" Tag="medium" Content="Medium" Checked="Effort_Checked" />
+                                <RadioButton Style="{StaticResource Segment}" GroupName="Effort" Tag="high" Content="High" Checked="Effort_Checked" />
+                            </UniformGrid>
+                        </Border>
+
+
+                        <TextBlock Text="FOLDER" Style="{StaticResource Label}" />
+                        <!-- one full-width field: folder name, then its location in grey; × at the end clears it -->
+                        <Grid>
+                            <Button x:Name="WorkspaceField" Height="32" Padding="10,0,34,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="PickWorkspace_Click">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Left" Text="&#xE8B7;" FontFamily="{DynamicResource IconFont}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="WorkspaceText" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Button>
+                            <Button x:Name="ClearWorkspace" Style="{StaticResource Plain}" HorizontalAlignment="Right" Margin="0,0,4,0" Height="24" Padding="7,0"
+                                    FontFamily="{DynamicResource IconFont}" FontSize="12" Content="&#xE711;" ToolTip="Leave folder" Click="ClearWorkspace_Click" />
+                        </Grid>
+                        <StackPanel x:Name="AgentOptions">
+                            <TextBlock Text="PERMISSIONS" Style="{StaticResource Label}" />
+                            <Border Style="{StaticResource Track}">
+                                <UniformGrid x:Name="PermPick" Columns="3">
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="Perm" Tag="manual" Content="Manual" Checked="Perm_Checked" />
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="Perm" Tag="assisted" Content="Assisted" Checked="Perm_Checked" />
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="Perm" Tag="all" Content="Allow all" Checked="Perm_Checked" />
+                                </UniformGrid>
+                            </Border>
+                            <TextBlock x:Name="PermHint" Foreground="{DynamicResource Dim}" FontSize="12" Margin="4,6,0,0" TextWrapping="Wrap" />
+                            <CheckBox x:Name="SandboxBox" Margin="2,12,0,0" Checked="Sandbox_Changed" Unchecked="Sandbox_Changed">
+                                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Fg}">Command guard <Run Foreground="{DynamicResource Dim}" Text="· blocks reaching outside the folder or network. Not a full sandbox." /></TextBlock>
+                            </CheckBox>
+                            <CheckBox x:Name="ElevatedBox" Margin="2,10,0,0" Checked="Elevated_Changed" Unchecked="Elevated_Changed">
+                                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Fg}">Run commands as administrator <Run Foreground="{DynamicResource Dim}" Text="· one UAC prompt, then no asking" /></TextBlock>
+                            </CheckBox>
+                            <TextBlock x:Name="ElevatedHint" Visibility="Collapsed" Foreground="#FFF59E0B" FontSize="12" Margin="26,4,0,0" TextWrapping="Wrap"
+                                       Text="The model can change anything on this PC. Turn off when done." />
+                        </StackPanel>
+
+
+                        <!-- rarely changed: tucked away -->
+                        <Expander Margin="0,16,0,0" Background="Transparent" BorderThickness="0" Padding="0">
+                            <!-- no box of its own: the header (a chevron that turns), then, open, a thin line and the settings in the popup itself -->
+                            <Expander.Template>
+                                <ControlTemplate TargetType="Expander">
+                                    <DockPanel>
+                                        <ToggleButton DockPanel.Dock="Top" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Cursor="Hand" Focusable="False">
+                                            <ToggleButton.Template>
+                                                <ControlTemplate TargetType="ToggleButton">
+                                                    <DockPanel Background="Transparent">
+                                                        <TextBlock x:Name="Chevron" DockPanel.Dock="Right" Text="&#xE70D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                                                            <TextBlock.RenderTransform><RotateTransform /></TextBlock.RenderTransform>
+                                                        </TextBlock>
+                                                        <ContentPresenter Content="{Binding Header, RelativeSource={RelativeSource AncestorType=Expander}}" VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True"><Setter TargetName="Chevron" Property="RenderTransform"><Setter.Value><RotateTransform Angle="180" /></Setter.Value></Setter></Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </ToggleButton.Template>
+                                        </ToggleButton>
+                                        <StackPanel x:Name="Body" Visibility="Collapsed">
+                                            <Border Height="1" Background="{DynamicResource Separator}" Margin="0,10,0,4" />
+                                            <ContentPresenter />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsExpanded" Value="True"><Setter TargetName="Body" Property="Visibility" Value="Visible" /></Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Expander.Template>
+                            <Expander.Header><TextBlock Text="Advanced  ·  temperature, template, system prompt, pinned context" FontSize="12" Foreground="{DynamicResource Dim}" /></Expander.Header>
+                            <StackPanel>
+                            <TextBlock x:Name="TempLabel" Style="{StaticResource Label}" />
+                            <Slider x:Name="Temp" Minimum="0" Maximum="1" TickFrequency="0.1" IsSnapToTickEnabled="True" ValueChanged="Temp_Changed" />
+                            <TextBlock Text="TEMPLATE" Style="{StaticResource Label}" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Plain}" Padding="8,0" Margin="6,0,0,0" Content="Save as template" Click="SaveTemplate_Click" />
+                                <ComboBox x:Name="TemplatePick" SelectionChanged="Template_Changed" ToolTip="Ready-made system prompts, and the ones you saved" />
+                            </DockPanel>
+                            <TextBlock Text="SYSTEM PROMPT" Style="{StaticResource Label}" />
+                            <TextBlock Text="e.g. &quot;Answer briefly in Hindi&quot;" Foreground="{DynamicResource Dim}" FontSize="12" TextWrapping="Wrap" Margin="0,-2,0,6" />
+                            <TextBox x:Name="SystemPrompt" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" MaxHeight="160" VerticalScrollBarVisibility="Auto" TextChanged="System_Changed" />
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Plain}" Padding="8,0" Margin="0,14,0,0" Content="Pin a file…" Click="PinFile_Click" VerticalAlignment="Bottom" />
+                                <TextBlock Text="PINNED CONTEXT" Style="{StaticResource Label}" />
+                            </DockPanel>
+                            <TextBlock Text="Notes or file text sent with every message in this chat." Foreground="{DynamicResource Dim}" FontSize="12" TextWrapping="Wrap" Margin="0,-2,0,6" />
+                            <TextBox x:Name="PinnedContext" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" MaxHeight="200" VerticalScrollBarVisibility="Auto" TextChanged="Pinned_Changed" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+            <!-- saved prompts: shown while the message box holds "/something" -->
+            <Border x:Name="SlashMenu" Grid.Row="1" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14,0,14,2"
+                    MinWidth="320" MaxWidth="480" CornerRadius="12" Padding="6" Background="{DynamicResource PopupBg}" BorderBrush="{DynamicResource GlassStroke}" BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="SAVED PROMPTS  ·  ↑↓ to pick, Enter to use, Esc to close" FontSize="11" Foreground="{DynamicResource Dim}" Margin="10,4,0,6" />
+                    <ListBox x:Name="SlashList" Background="Transparent" BorderThickness="0" MaxHeight="260" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             PreviewMouseLeftButtonUp="SlashList_Click">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Cursor" Value="Hand" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Bd" CornerRadius="8" Padding="10,6" Margin="0,1" Background="Transparent"><ContentPresenter /></Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource Glass}" /></Trigger>
+                                                <Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="Background" Value="#2E7C5CFF" /></Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Fg}"><Run Text="/" /><Run Text="{Binding Name, Mode=OneWay}" /></TextBlock>
+                                    <TextBlock Text="{Binding Text}" FontSize="12" Foreground="{DynamicResource Dim}" TextTrimming="CharacterEllipsis" MaxHeight="16" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+            <Border x:Name="Beam" Grid.Row="2" Margin="14,6,14,14" CornerRadius="16" Padding="1.5" Background="{DynamicResource GlassStroke}">
+                <Border x:Name="BeamInner" CornerRadius="15" Background="{DynamicResource InputBg}" Padding="10">
+                    <StackPanel x:Name="ComposerStack">
+                        <WrapPanel x:Name="QuickBar" Margin="0,0,0,8" />
+                        <Border x:Name="QuoteBar" Visibility="Collapsed" CornerRadius="10" Padding="10,7,4,7" Margin="0,0,0,8"
+                                Background="{DynamicResource Glass}" BorderBrush="{DynamicResource GlassStroke}" BorderThickness="1">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Ghost}" Content="&#xE8BB;" FontSize="12" ToolTip="Don't reply to this" Click="QuoteClear_Click" VerticalAlignment="Top" />
+                                <TextBlock DockPanel.Dock="Left" Text="&#xE97A;" FontFamily="{DynamicResource IconFont}" FontSize="14" Foreground="#A78BFA" Margin="0,2,8,0" VerticalAlignment="Top" />
+                                <StackPanel>
+                                    <TextBlock Text="Replying to" FontSize="12" Foreground="{DynamicResource Dim}" />
+                                    <TextBlock x:Name="QuoteText" FontSize="12.5" Foreground="{DynamicResource Fg}" TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <WrapPanel x:Name="Attachments" />
+                        <TextBlock x:Name="PasteHint" Visibility="Collapsed" FontSize="12" Foreground="{DynamicResource Dim}" Margin="4,0,0,6" />
+                        <!-- toolbar: attachments + per-chat options in one place -->
+                        <DockPanel x:Name="ToolbarRow">
+                            <!-- one pill for mode, provider/model, effort and tuning -->
+                            <ToggleButton x:Name="OptionsToggle" DockPanel.Dock="Right" Margin="0,0,0,6" Height="26" Padding="9,0" MaxWidth="220"
+                                          VerticalAlignment="Top" ToolTip="Chat options">
+                                <StackPanel Orientation="Horizontal">
+                                    <!-- where messages go: a cloud, or this PC (local models / local-only chats) -->
+                                    <TextBlock x:Name="WhereIcon" FontFamily="{DynamicResource IconFont}" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="ModeIcon" FontFamily="{DynamicResource IconFont}" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="Summary" FontSize="12" MaxWidth="160" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    <TextBlock Text="&#xE70E;" FontFamily="{DynamicResource IconFont}" FontSize="12" Margin="6,0,0,0" Opacity="0.6" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <!-- helper agents: the count, green dot while any work; opens the agent map -->
+                            <Button x:Name="AgentsButton" DockPanel.Dock="Right" Margin="0,0,6,6" Height="26" Padding="9,0" VerticalAlignment="Top" Click="AgentsButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="AgentsDot" Width="6" Height="6" Fill="{DynamicResource Dim}" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="AgentsText" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        <WrapPanel x:Name="ToolButtons" Margin="0,0,0,6">
+                            <WrapPanel.Resources>
+                                <!-- bare icons: no box, a soft background only on hover -->
+                                <Style TargetType="Button" BasedOn="{StaticResource Plain}">
+                                    <Setter Property="Padding" Value="7,0" />
+                                    <Setter Property="Margin" Value="0,0,2,4" />
+                                    <Setter Property="FontSize" Value="14" />
+                                </Style>
+                                <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                                    <Setter Property="Padding" Value="10,0" />
+                                    <Setter Property="Height" Value="32" />
+                                    <Setter Property="Margin" Value="0,0,6,6" />
+                                </Style>
+                                <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                    <Setter Property="Margin" Value="0,0,6,6" />
+                                    <Setter Property="FontSize" Value="12" />
+                                    <Setter Property="Height" Value="32" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                </Style>
+                            </WrapPanel.Resources>
+                            <Button Click="Attach_Click" ToolTip="Attach">
+                                <TextBlock Text="&#xE723;" FontFamily="{DynamicResource IconFont}" />
+                            </Button>
+                            <Button x:Name="SkillsButton" Click="Skills_Click" ToolTip="Skills">
+                                <TextBlock Text="&#xE82D;" FontFamily="{DynamicResource IconFont}" />
+                            </Button>
+                            <Button Click="Camera_Click" ToolTip="Camera">
+                                <TextBlock Text="&#xE722;" FontFamily="{DynamicResource IconFont}" />
+                            </Button>
+                            <Button Click="Dictate_Click" ToolTip="Dictate">
+                                <TextBlock x:Name="MicIcon" Text="&#xE720;" FontFamily="{DynamicResource IconFont}" />
+                            </Button>
+                            <!-- how full the model's memory is; click to compact -->
+                            <Button x:Name="ContextRing" Click="Compact_Click" Visibility="Collapsed">
+                                <Grid Width="15" Height="15">
+                                    <Ellipse Stroke="{DynamicResource Dim}" Opacity="0.35" StrokeThickness="2.2" />
+                                    <Path x:Name="ContextArc" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                </Grid>
+                            </Button>
+                        </WrapPanel>
+                        </DockPanel>
+                        <Grid x:Name="InputRow">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="Input" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="180" MinHeight="40"
+                                     VerticalScrollBarVisibility="Auto" PreviewKeyDown="Input_KeyDown"
+                                     DataObject.Pasting="Input_Pasting" TextChanged="Input_TextChanged"
+                                     Background="Transparent" BorderThickness="0" FontSize="14" VerticalContentAlignment="Center" />
+                            <TextBlock x:Name="InputHint" Text="Ask anything  ·  type / for saved prompts" FontSize="14" Foreground="{DynamicResource Dim}" Opacity="0.7"
+                                       Margin="12,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+                            <Button x:Name="SendBtn" Grid.Column="1" Margin="10,0,0,0" Width="44" Height="40" Padding="0"
+                                    VerticalAlignment="Bottom" Style="{StaticResource Shimmer}" Click="Send_Click" ToolTip="Send (Enter)">
+                                <TextBlock x:Name="SendIcon" Text="&#xE724;" FontFamily="{DynamicResource IconFont}" FontSize="16" />
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Grid>
+    </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0b10; color: #ddd; font: 13px "Segoe UI", sans-serif; overflow: hidden; }
+  #stage { position: absolute; inset: 0 0 64px 0; display: flex; align-items: center; justify-content: center; }
+  video, img { max-width: 100%; max-height: 100%; border-radius: 10px; }
+  video { transform: scaleX(-1); }
+  img { display: none; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; display: flex; gap: 10px; align-items: center; justify-content: center; }
+  button { border: 1px solid #ffffff30; background: #ffffff12; color: #eee; border-radius: 20px; padding: 8px 18px; font: inherit; cursor: pointer; }
+  button:hover { background: #ffffff22; }
+  #snap { width: 48px; height: 48px; padding: 0; border-radius: 50%; border: 3px solid #fff; background: #ffffff30; }
+  #snap:hover { background: #ffffff60; }
+  select { background: #1a1a22; color: #ddd; border: 1px solid #ffffff30; border-radius: 8px; padding: 6px; max-width: 200px; }
+  #msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+  .hide { display: none !important; }
+</style></head>
+<body>
+<div id="stage"><video id="v" autoplay playsinline muted></video><img id="shot"></div>
+<div id="msg"></div>
+<div id="bar">
+  <select id="cams" class="hide" title="Camera"></select>
+  <button id="snap" title="Take photo (Space)"></button>
+  <button id="retake" class="hide">Retake</button>
+  <button id="use" class="hide">Attach photo</button>
+</div>
+<script>
+const v = document.getElementById('v'), shot = document.getElementById('shot'), cams = document.getElementById('cams');
+const snap = document.getElementById('snap'), retake = document.getElementById('retake'), use = document.getElementById('use'), msg = document.getElementById('msg');
+let stream, data;
+async function start(id) {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId: { exact: id } } : { width: 1280, height: 720 } });
+    v.srcObject = stream;
+    const list = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    if (list.length > 1 && !cams.options.length) {
+      list.forEach((d, i) => cams.add(new Option(d.label || 'Camera ' + (i + 1), d.deviceId)));
+      cams.classList.remove('hide');
+    }
+  } catch (e) {
+    msg.style.display = 'flex';
+    msg.textContent = e.name === 'NotAllowedError'
+      ? 'Ivo isn\'t allowed to use the camera. Turn on Settings → Privacy & security → Camera → "Let desktop apps access your camera".'
+      : e.name === 'NotFoundError' ? 'No camera found on this PC.' : 'Couldn\'t start the camera: ' + e.message;
+    snap.classList.add('hide');
+  }
+}
+cams.onchange = () => start(cams.value);
+function take() {
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  const g = c.getContext('2d'); g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(v, 0, 0);
+  data = c.toDataURL('image/jpeg', 0.9);
+  shot.src = data; shot.style.display = 'block'; v.style.display = 'none';
+  snap.classList.add('hide'); cams.classList.add('hide'); retake.classList.remove('hide'); use.classList.remove('hide');
+  use.focus();
+}
+snap.onclick = take;
+retake.onclick = () => { shot.style.display = 'none'; v.style.display = 'block'; snap.classList.remove('hide'); retake.classList.add('hide'); use.classList.add('hide'); if (cams.options.length > 1) cams.classList.remove('hide'); };
+use.onclick = () => chrome.webview.postMessage(data);
+document.onkeydown = e => {
+  if (e.key === ' ' && !snap.classList.contains('hide')) { e.preventDefault(); take(); }
+  else if (e.key === 'Escape') chrome.webview.postMessage('');
+};
+start();
+</script>
+</body></html>

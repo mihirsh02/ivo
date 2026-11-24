@@ -1,0 +1,10 @@
+bin/
+obj/
+dist/
+publish/
+installer/cert/
+*.user
+.vs/
+cleanup-report.md
+__pycache__/
+*_wpftmp.csproj

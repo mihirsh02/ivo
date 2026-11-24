@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- background collections: a call's video never waits on the collector -->
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- keep less spare memory: Ivo mostly waits (for you, a reminder, a call) -->
+    <TieredPGO>false</TieredPGO>
+    <OutputType>WinExe</OutputType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Ivo</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>Ivo</Product>
+    <Company>Ivo</Company>
+    <Authors>Mihir Sharma</Authors>
+    <Copyright>© 2026 Mihir Sharma</Copyright>
+    <Description>Ivo: your AI desk on Windows</Description>
+    <ApplicationIcon>Assets\ivo.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- English only: .NET's messages in 13 other languages are 17 MB the app never shows -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- The WPF app uses PerMonitorV2 in app.manifest; WFO0003 is a WinForms analyzer false positive from the tray dependency. -->
+    <NoWarn>$(NoWarn);WPF0001;WFO0003</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WinForms is only here for the tray icon; keep its names out of the WPF code -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <!-- Portal\ is its own small app (the standalone Portal); it borrows Core\Portal*.cs, not the other way round -->
+    <Compile Remove="tools\**;dist\**;installer\**;tests\**;Portal\**" />
+    <Page Remove="Portal\**" />
+    <ApplicationDefinition Remove="Portal\**" />
+    <InternalsVisibleTo Include="Ivo.Checks" />
+    <None Remove="tools\**;dist\**;installer\**;Portal\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+    <RuntimeHostConfigurationOption Include="System.GC.RetainVM" Value="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Assets\**\*" Exclude="Assets\IvoIcons.otf;Assets\IvoIconsSoft.otf;Assets\ivo.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\ivo.ico" />
+    <EmbeddedResource Include="Core\IvoChat.json" LogicalName="Ivo.IvoChat.json" />
+    <EmbeddedResource Include="Core\IvoIntents.json" LogicalName="Ivo.IvoIntents.json" />
+    <Resource Include="Assets\IvoIcons.otf" />
+    <Resource Include="Assets\IvoIconsSoft.otf" />
+    <Resource Include="Assets\blub.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
+    <PackageReference Include="LLamaSharp" Version="0.30.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.30.0" />
+    <PackageReference Include="Markdig" Version="1.5.0" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+    <PackageReference Include="NBitcoin.Secp256k1" Version="4.0.4" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.12.40" />
+    <PackageReference Include="SIPSorcery" Version="10.0.17" />
+    <PackageReference Include="SIPSorceryMedia.Encoders" Version="10.0.4" />
+    <PackageReference Include="SIPSorceryMedia.Windows" Version="10.0.17" />
+    <PackageReference Include="WpfMath" Version="2.1.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The installer's window (IvoInstaller.exe). It runs from the folder the launcher (installer\IvoLauncher) unpacks:
+       Ivo's published app plus this, sharing one .NET runtime. It copies Ivo from that folder into Program Files.
+       Built by installer\build.ps1. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWPF>true</UseWPF>
+    <!-- the same runtime pieces the app uses, so the two share one runtime in the archive: Ivo has WPF and Windows Forms,
+         Ivo Portal only WPF (it leaves Windows Forms out) -->
+    <UseWindowsForms Condition="'$(App)' != 'Portal'">true</UseWindowsForms>
+    <DisableTransitiveFrameworkReferences Condition="'$(App)' == 'Portal'">true</DisableTransitiveFrameworkReferences>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>IvoInstaller</AssemblyName>
+    <ApplicationManifest>install.manifest</ApplicationManifest>
+    <SelfContained>true</SelfContained>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+  <!-- which app this installs: Ivo (the default) or Portal (-p:App=Portal). The window reads these from its assembly. -->
+  <PropertyGroup Condition="'$(App)' != 'Portal'">
+    <Product>Ivo</Product>
+    <ApplicationIcon>..\..\Assets\ivo.ico</ApplicationIcon>
+    <InnoAppId>{6E7A3C1D-4B2F-4C8E-9A51-7D0B3E2F9A64}</InnoAppId>
+    <MsiUpgradeCode>{6E7A3C1D-4B2F-4C8E-9A51-7D0B3E2F9A65}</MsiUpgradeCode>
+    <SetupName>IvoSetup</SetupName>
+    <Blurb>Your AI desk on Windows: chats with any model, agents that work in your code, a planner and a morning briefing.</Blurb>
+    <ReadyText>Open it from the Start menu, or press Ctrl+Shift+Space from anywhere. Ctrl+Alt+N captures a to-do or reminder.</ReadyText>
+    <DataWords>chats, settings, keys and memories</DataWords>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(App)' == 'Portal'">
+    <Product>Ivo Portal</Product>
+    <ApplicationIcon>..\..\Portal\portal.ico</ApplicationIcon>
+    <InnoAppId>{B47529B4-032D-4F4E-873A-165EC91CB352}</InnoAppId>
+    <MsiUpgradeCode>{87122A19-F7A0-44ED-9C49-338AAA277C90}</MsiUpgradeCode>
+    <SetupName>IvoPortalSetup</SetupName>
+    <Blurb>Ivo Portal: chat, calls and screen sharing, person to person.</Blurb>
+    <ReadyText>Open it from the Start menu.</ReadyText>
+    <DataWords>chats, contacts and settings</DataWords>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Description>$(Product) setup</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="InnoAppId" Value="$(InnoAppId)" />
+    <AssemblyMetadata Include="MsiUpgradeCode" Value="$(MsiUpgradeCode)" />
+    <AssemblyMetadata Include="SetupName" Value="$(SetupName)" />
+    <AssemblyMetadata Include="Blurb" Value="$(Blurb)" />
+    <AssemblyMetadata Include="ReadyText" Value="$(ReadyText)" />
+    <AssemblyMetadata Include="DataWords" Value="$(DataWords)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Windows Forms is here only for its runtime files; the window is WPF -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+</Project>

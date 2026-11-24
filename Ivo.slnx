@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/installer/">
+    <Project Path="installer/IvoInstall/IvoInstall.csproj" />
+    <Project Path="installer/IvoLauncher/IvoLauncher.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ivo.Checks/Ivo.Checks.csproj" />
+  </Folder>
+  <Project Path="Ivo.csproj" />
+</Solution>

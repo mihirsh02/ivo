@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ivo's own words on the MSI's stock pages (errors, files in use, browse). Passed to wix build with -loc. -->
+<WixLocalization Culture="en-US" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+</WixLocalization>
